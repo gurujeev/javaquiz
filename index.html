@@ -1,0 +1,252 @@
+<title>Java Streak Quiz</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky stat strip on top, one question card centered, modal popups for feedback, full-screen results at the end */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --fg:#14202e; --muted:#5b6b7e; --line:#d9e0e8;
+  --accent:#e0620a; --accent-fg:#ffffff; --code-bg:#eef2f6;
+  --good:#16854a; --good-bg:#e3f4ea; --bad:#c62f3a; --bad-bg:#fbe7e9;
+  --star:#f5a400;
+  --display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1621; --surface:#16212f; --fg:#e8eef5; --muted:#92a3b6; --line:#27384b;
+  --accent:#ff8a3d; --accent-fg:#1a0e03; --code-bg:#0f1a27;
+  --good:#4cc787; --good-bg:#12301f; --bad:#ff6b76; --bad-bg:#3a1a1f; --star:#ffc233; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1621; --surface:#16212f; --fg:#e8eef5; --muted:#92a3b6; --line:#27384b;
+  --accent:#ff8a3d; --accent-fg:#1a0e03; --code-bg:#0f1a27;
+  --good:#4cc787; --good-bg:#12301f; --bad:#ff6b76; --bad-bg:#3a1a1f; --star:#ffc233; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2{font-family:var(--display);margin:0;text-wrap:balance}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.top h1{font-size:1.5rem;font-weight:800;letter-spacing:-.01em}
+.top h1 span{color:var(--accent)}
+.top small{font-family:var(--mono);color:var(--muted);font-size:.8rem}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.stat b{display:block;font-family:var(--display);font-size:1.6rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.stat.hot b{color:var(--accent)}
+.stat.bump b{animation:bump .4s}
+@keyframes bump{40%{transform:scale(1.25)}}
+@media(max-width:480px){.stats{grid-template-columns:repeat(2,1fr)}}
+
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:clamp(16px,4vw,28px);display:flex;flex-direction:column;gap:18px}
+.qnum{font-family:var(--mono);font-size:.8rem;color:var(--accent);letter-spacing:.06em;text-transform:uppercase}
+.qtext{font-size:1.1rem;font-weight:500;overflow-wrap:anywhere}
+.qtext p{margin:0}
+pre.code{margin:12px 0 0;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;
+  font-family:var(--mono);font-size:.85rem;line-height:1.55;overflow-x:auto;white-space:pre;tab-size:4}
+.opts{display:grid;gap:10px}
+.opt{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start;text-align:left;width:100%;
+  font:inherit;color:inherit;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;
+  transition:border-color .15s,transform .1s,background .15s}
+.opt:hover:not(:disabled){border-color:var(--accent);transform:translateX(2px)}
+.opt:focus-visible,.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.opt .k{font-family:var(--mono);font-weight:500;width:30px;height:30px;border-radius:7px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);font-size:.85rem}
+.opt .t{min-width:0;overflow-wrap:anywhere;padding-top:3px}
+.opt .t code,.opt .t{font-size:.97rem}
+.opt.wrong{border-color:var(--bad);background:var(--bad-bg);opacity:.75;cursor:not-allowed}
+.opt.wrong .k{background:var(--bad);color:#fff;border-color:var(--bad)}
+.opt.right{border-color:var(--good);background:var(--good-bg)}
+.opt.right .k{background:var(--good);color:#fff;border-color:var(--good)}
+.opt:disabled{cursor:not-allowed}
+.hint{font-size:.85rem;color:var(--muted);min-height:1.3em}
+
+.btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 22px;cursor:pointer;background:var(--accent);color:var(--accent-fg)}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent;color:var(--fg);border:1.5px solid var(--line)}
+
+/* popups */
+.modal{position:fixed;inset:0;background:rgba(8,14,22,.6);display:grid;place-items:center;padding:20px;z-index:50;overflow:hidden;animation:fade .2s}
+@keyframes fade{from{opacity:0}}
+.pop{position:relative;background:var(--surface);border-radius:18px;border:2px solid var(--line);padding:28px 24px 24px;max-width:380px;width:100%;
+  text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;animation:pop .35s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{from{transform:scale(.7);opacity:0}}
+.pop.good{border-color:var(--good)} .pop.bad{border-color:var(--bad)}
+.pop h2{font-size:1.7rem;font-weight:800}
+.pop.good h2{color:var(--good)} .pop.bad h2{color:var(--bad)}
+.pop p{margin:0;color:var(--muted)}
+.pop .btn{margin-top:8px}
+.bigstar{width:72px;height:72px;animation:spin 1s ease-out}
+@keyframes spin{from{transform:rotate(-200deg) scale(0)}}
+.x{width:64px;height:64px;border-radius:50%;background:var(--bad);color:#fff;display:grid;place-items:center;font-size:2rem;font-weight:800;animation:shake .5s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:60;width:100%;height:100%}
+
+/* results */
+.final{align-items:center;text-align:center}
+.final h2{font-size:clamp(1.8rem,6vw,2.6rem);font-weight:800}
+.final .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.final .stat{padding:16px 8px}
+.final .stat b{font-size:2.2rem}
+@media(max-width:480px){.final .grid{grid-template-columns:1fr}}
+.final p{margin:0;color:var(--muted);max-width:46ch}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap" id="app">
+  <div class="top"><h1>Java <span>Streak</span> Quiz</h1><small>Unit 5 · JDBC, lambdas, streams</small></div>
+  <div class="stats" aria-live="polite">
+    <div class="stat" id="sScore"><b>0</b><span>Score</span></div>
+    <div class="stat hot" id="sStreak"><b>0</b><span>Streak</span></div>
+    <div class="stat" id="sBest"><b>0</b><span>Best streak</span></div>
+    <div class="stat" id="sBreaks"><b>0</b><span>Streak breaks</span></div>
+  </div>
+  <div class="bar" role="progressbar" aria-label="Progress"><i id="prog"></i></div>
+  <main id="stage"></main>
+</div>
+<canvas id="fx"></canvas>
+<div id="modalRoot"></div>
+
+<script>
+const QUESTIONS = [{"q": "What happens when this code is compiled?\nStream<String> s = Stream.of(\"a\", \"b\");\nfor (String x : s) {\n    System.out.println(x);\n}", "o": ["It compiles and prints a and b in order", "Compile-time error, because Stream does not implement Iterable", "It compiles but throws IllegalStateException at runtime", "It compiles but prints nothing, because the stream is lazy"], "a": 1}, {"q": "What is the main security advantage of PreparedStatement over Statement?", "o": ["It helps prevent SQL injection by treating parameter values as data, not as SQL code", "It encrypts the data sent to the database", "It automatically validates the SQL syntax at compile time", "It removes the need to open a connection"], "a": 0}, {"q": "Which lambda expression is equivalent to this anonymous class?\nnew Thread(new Runnable() {\n    public void run() {\n        System.out.println(\"Hi\");\n    }\n});", "o": ["new Thread(() => System.out.println(\"Hi\"));", "new Thread(run() -> System.out.println(\"Hi\"));", "new Thread(() -> System.out.println(\"Hi\"));", "new Thread(Runnable -> System.out.println(\"Hi\"));"], "a": 2}, {"q": "What is the output?\nList<Integer> list = Arrays.asList(3, 1, 2);\nlist.stream().sorted().forEach(x -> { });\nSystem.out.println(list);", "o": ["[3, 1, 2]", "[1, 2, 3]", "[3, 2, 1]", "UnsupportedOperationException is thrown, because Arrays.asList() returns a fixed-size list"], "a": 0}, {"q": "In the JDBC architecture, who supplies the classes that implement interfaces such as Connection, Statement and ResultSet?", "o": ["The database vendor or a third-party JDBC driver provider", "The JDK itself, which ships implementations for every database", "The application developer who writes the JDBC program", "The JVM, which generates them at run time from the SQL text"], "a": 0}, {"q": "What does IntStream.empty().max() return?", "o": ["An empty OptionalInt", "0", "Integer.MIN_VALUE", "It throws NoSuchElementException"], "a": 0}, {"q": "What is the output?\n@FunctionalInterface\ninterface Decorator {\n    String decorate(String s);\n    default Decorator twice() { return s -> decorate(decorate(s)); }\n}\nDecorator d = s -> \"[\" + s + \"]\";\nSystem.out.println(d.twice().decorate(\"Bob\"));", "o": ["[Bob]", "[Bob][Bob]", "[[Bob]]", "Compile-time error, because a functional interface cannot contain a default method"], "a": 2}, {"q": "What is the output?\nBiFunction<Integer, Integer, Integer> add = (a, b) -> a + b;\nFunction<Integer, Integer> square = x -> x * x;\nSystem.out.println(add.andThen(square).apply(2, 3));", "o": ["13", "10", "Compile-time error, because a BiFunction cannot be chained with a Function", "25"], "a": 3}, {"q": "What happens?\nStream.of(\"a\", \"bb\", \"a\").collect(Collectors.toMap(s -> s, String::length));", "o": ["The second a silently replaces the first, giving {a=1, bb=2}", "IllegalStateException is thrown because of the duplicate key a", "The values are merged into lists, giving {a=[1, 1], bb=[2]}", "Compile-time error, because String::length cannot be used as a value mapper"], "a": 1}, {"q": "What is the output?\nclass Tag {\n    String n;\n    Tag(String n) { this.n = n; }\n}\nSystem.out.println(Stream.of(new Tag(\"x\"), new Tag(\"x\")).distinct().count());", "o": ["2", "1", "0", "Compile-time error, because Tag does not implement Comparable"], "a": 0}, {"q": "Which of the following is a short-circuiting terminal operation?", "o": ["limit()", "anyMatch()", "skip()", "peek()"], "a": 1}, {"q": "Which lambda is a valid Function<Integer, Integer> that doubles its argument using a block body?", "o": ["x -> { x * 2 }", "x -> { return x * 2; }", "x -> { x * 2; }", "x -> return x * 2;"], "a": 1}, {"q": "What is the output?\nPredicate<String> isEmpty = String::isEmpty;\nSystem.out.println(isEmpty.negate().test(\"Java\"));", "o": ["false", "Java", "true", "Compile-time error, because Predicate has no negate() method"], "a": 2}, {"q": "From JDBC 4.0 onwards, what changed about loading drivers?", "o": ["Drivers can no longer be loaded manually", "Drivers found on the classpath are loaded automatically through the service provider mechanism, so Class.forName() is usually not required", "Every driver must be loaded with System.load()", "Drivers are bundled inside the JDK"], "a": 1}, {"q": "Is the @FunctionalInterface annotation required for an interface to be used as the target type of a lambda expression?", "o": ["Yes, without it the compiler rejects every lambda assigned to that interface", "No, it is optional. Any interface with exactly one abstract method can be the target of a lambda; the annotation only makes the compiler enforce that rule", "Yes, but only when the interface is generic", "No, but without it the lambda is executed more slowly at runtime"], "a": 1}, {"q": "What is the output?\nMap<Boolean, List<Integer>> m = Stream.of(2, 4, 6)\n    .collect(Collectors.partitioningBy(x -> x > 10));\nSystem.out.println(m);", "o": ["{false=[2, 4, 6]}", "{false=[2, 4, 6], true=[]}", "{true=[2, 4, 6], false=[]}", "{}"], "a": 1}, {"q": "What is the output?\nSystem.out.println(Stream.of(\"kiwi\", \"fig\", \"banana\", \"plum\")\n    .max(Comparator.comparing(String::length))\n    .get());", "o": ["6", "fig", "banana", "plum"], "a": 2}, {"q": "What is the output?\nSystem.out.println(Stream.of(\"apple\", \"bat\", \"cherry\")\n    .filter(s -> s.length() > 3)\n    .map(String::toUpperCase)\n    .collect(Collectors.toList()));", "o": ["[APPLE, BAT, CHERRY]", "[apple, cherry]", "[APPLE, CHERRY]", "[BAT]"], "a": 2}, {"q": "In which order should JDBC resources be closed when closing them manually?", "o": ["Connection, then Statement, then ResultSet", "Statement, then Connection, then ResultSet", "ResultSet, then Statement, then Connection", "The order does not matter at all"], "a": 2}, {"q": "What is the output?\nSystem.out.println(Stream.of(1, 2, 3).parallel().sequential().isParallel());", "o": ["false", "true", "It depends on the number of CPU cores", "IllegalStateException is thrown, because the mode cannot be changed after parallel()"], "a": 0}, {"q": "What is the output?\nStream.of(1, 2, 3).filter(x -> { System.out.print(\"F\"); return x > 1; });", "o": ["FFF", "F", "Nothing is printed", "Compile-time error"], "a": 2}, {"q": "Which functional interface type does the Map.forEach() method accept as its argument?", "o": ["Consumer<Map.Entry<K, V>>", "BiFunction<K, V, Void>", "BiConsumer<? super K, ? super V>", "BiPredicate<K, V>"], "a": 2}, {"q": "What is the result of this code?\nint count = 0;\nRunnable r = () -> count++;\nr.run();", "o": ["Compile-time error, because count must be final or effectively final", "It compiles and count becomes 1", "It compiles but throws an exception at runtime", "It compiles and count remains 0"], "a": 0}, {"q": "Which JDBC driver type is known as the native-API driver, because it converts JDBC calls into calls to the database vendor's client-side native library (C/C++)?", "o": ["Type 1", "Type 2", "Type 3", "Type 4"], "a": 1}, {"q": "A query is run as: SELECT id, name FROM emp\nWhich call correctly reads the name column of the current row of the ResultSet rs?", "o": ["rs.getString(0)", "rs.getName()", "rs.get(\"name\")", "rs.getString(2)"], "a": 3}, {"q": "Why is using a parallel stream to run a blocking network call for every element considered a pitfall?", "o": ["Each element is given a brand-new thread, which quickly exhausts system memory", "Network calls are not permitted inside lambda expressions", "The tasks run in the shared common ForkJoinPool, so blocked threads can starve other parallel work in the same JVM", "The results of a parallel stream cannot be collected into a List"], "a": 2}, {"q": "What is the output?\nSystem.out.println(Stream.of(1, 2, 3, 4, 5, 6)\n    .limit(4)\n    .skip(2)\n    .collect(Collectors.toList()));", "o": ["[3, 4, 5, 6]", "[3, 4]", "[5, 6]", "[1, 2]"], "a": 1}, {"q": "What is the output?\nSystem.out.println(Stream.of(\"ant\", \"bee\", \"ape\", \"bat\")\n    .collect(Collectors.groupingBy(\n        s -> s.charAt(0),\n        Collectors.mapping(s -> s.substring(1), Collectors.toList()))));", "o": ["{a=[nt, pe], b=[ee, at]}", "{a=[ant, ape], b=[bee, bat]}", "{a=2, b=2}", "{a=[t, e], b=[e, t]}"], "a": 0}, {"q": "What is the output?\nFunction<String, StringBuilder> f = StringBuilder::new;\nSystem.out.println(f.apply(\"abc\").reverse());", "o": ["abc", "An empty string, because the constructor reference ignores the argument", "Compile-time error, because a constructor cannot be used in a method reference", "cba"], "a": 3}, {"q": "What is the output?\nSystem.out.println(Stream.of(\"a\", \"b\", \"c\").reduce(\"X\", (x, y) -> x + y));", "o": ["abc", "abcX", "XaXbXc", "Xabc"], "a": 3}, {"q": "Which of the following is NOT a valid use of a ? placeholder in a PreparedStatement?", "o": ["SELECT * FROM emp WHERE id = ?", "INSERT INTO emp(id, name) VALUES (?, ?)", "UPDATE emp SET name = ? WHERE id = ?", "SELECT * FROM ? WHERE id = 1"], "a": 3}, {"q": "What is the result of this code?\nint x = 5;\nFunction<Integer, Integer> f = x -> x * 2;\nSystem.out.println(f.apply(3));", "o": ["It prints 6", "Compile-time error, because the lambda parameter x redeclares a local variable that is already defined", "It prints 10", "It throws a RuntimeException"], "a": 1}, {"q": "What is the output?\nSystem.out.println(Stream.of(\"a\", \"bb\", \"c\")\n    .collect(Collectors.toMap(s -> s.length(), s -> s, (x, y) -> x + \"|\" + y)));", "o": ["{1=c, 2=bb}", "{1=a, 2=bb}", "IllegalStateException is thrown because of the duplicate key 1", "{1=a|c, 2=bb}"], "a": 3}, {"q": "What is the output?\nStream.of(\"a\", \"b\", \"c\")\n      .map(s -> { System.out.print(s); return s.toUpperCase(); })\n      .forEach(s -> System.out.print(s));", "o": ["abcABC", "aAbBcC", "ABCabc", "AaBbCc"], "a": 1}, {"q": "What is the output?\nConsumer<String> c1 = s -> System.out.print(s + \"1\");\nConsumer<String> c2 = s -> System.out.print(s + \"2\");\nc1.andThen(c2).accept(\"A\");", "o": ["A1A2", "A2A1", "A1", "A12"], "a": 0}, {"q": "What happens when this code runs and no registered JDBC driver accepts the URL?\nConnection con = DriverManager.getConnection(\n    \"jdbc:xyz://localhost/db\", \"user\", \"pass\");", "o": ["A ClassNotFoundException is thrown", "null is returned instead of a Connection", "An IllegalArgumentException is thrown", "A SQLException with the message \"No suitable driver found\" is thrown"], "a": 3}, {"q": "Which task is the best candidate for a parallel stream?", "o": ["Applying an expensive, independent calculation to every element of a large ArrayList", "Printing the elements of a 5-element list", "Computing a running total in which each step depends on the previous result", "Running a pipeline whose lambda increments a shared non-atomic counter"], "a": 0}, {"q": "What is the output?\nSystem.out.println(Stream.of(1, 2, 3)\n    .flatMap(x -> Stream.of(x, x * 10))\n    .collect(Collectors.toList()));", "o": ["[1, 2, 3, 10, 20, 30]", "[[1, 10], [2, 20], [3, 30]]", "[10, 20, 30]", "[1, 10, 2, 20, 3, 30]"], "a": 3}, {"q": "What happens when @FunctionalInterface is applied to an interface that declares two abstract methods?", "o": ["A runtime exception occurs", "Only a warning is shown", "The annotation is silently ignored", "A compile-time error occurs"], "a": 3}, {"q": "What is the output?\nSystem.out.println(IntStream.of(1, 2, 3, 4).average().getAsDouble());", "o": ["2.0", "10.0", "2.5", "OptionalDouble[2.5]"], "a": 2}, {"q": "Which statement about a lambda expression and an anonymous inner class is correct?", "o": ["A lambda can extend an abstract class, whereas an anonymous class can only implement interfaces", "A lambda can declare its own instance fields, whereas an anonymous class cannot", "Both a lambda and an anonymous class can implement an interface with any number of abstract methods", "A lambda can implement only a functional interface, whereas an anonymous class can also implement an interface with several abstract methods or extend a class"], "a": 3}, {"q": "What is the output?\nSupplier<String> s = () -> { System.out.print(\"X\"); return \"ok\"; };\nSystem.out.print(\"A\");\nSystem.out.println(s.get());", "o": ["XAok", "AXok", "Aok", "XAXok"], "a": 1}, {"q": "What happens when this code is compiled and run?\nSystem.out.println(Stream.of(1, 2, 3).collect(Collectors.joining(\",\")));", "o": ["Compile-time error, because joining() works only on a stream of CharSequence elements", "It prints 1,2,3", "It prints [1,2,3]", "ClassCastException is thrown at runtime"], "a": 0}, {"q": "What is the output?\nIntSummaryStatistics st = IntStream.of(4, 8, 6).summaryStatistics();\nSystem.out.println(st.getMin() + \" \" + st.getMax() + \" \" + st.getSum());", "o": ["4 8 3", "4 8 6", "4 8 18", "4 6 18"], "a": 2}, {"q": "Compared with DriverManager, why is javax.sql.DataSource generally preferred for obtaining connections in production applications?", "o": ["It removes the need for a JDBC driver", "It can be backed by a connection pool, and its configuration can be kept outside the application code", "It automatically rewrites SQL so that it works on every database", "It executes SQL statements faster than the Statement interface"], "a": 1}, {"q": "What kind of method reference is String::toUpperCase?", "o": ["A reference to a static method", "A reference to an instance method of a particular object", "A reference to a constructor", "A reference to an instance method of an arbitrary object of a particular type"], "a": 3}, {"q": "What does Statement.execute() return when the SQL string is an UPDATE statement?", "o": ["false, because the result is an update count and not a ResultSet", "true, because the statement ran successfully", "The number of rows updated, as an int", "A ResultSet containing the updated rows"], "a": 0}, {"q": "What is the risk in this code?\nList<Integer> result = new ArrayList<>();\nIntStream.range(0, 1000).parallel().forEach(result::add);", "o": ["The non-thread-safe ArrayList may lose elements or throw an exception because of a race condition", "There is no risk, since parallel streams make the list thread-safe", "The code will not compile", "The stream is automatically converted to a sequential stream"], "a": 0}, {"q": "What is the output?\nSystem.out.println(Stream.iterate(1, x -> x * 2)\n    .limit(5)\n    .collect(Collectors.toList()));", "o": ["[2, 4, 8, 16, 32]", "[1, 2, 3, 4, 5]", "[1, 2, 4, 8, 16]", "The program never finishes, because iterate() creates an infinite stream"], "a": 2}, {"q": "What is the output?\nSystem.out.println(Stream.of(5, 3, 5, 1, 3).distinct().sorted().limit(2).collect(Collectors.toList()));", "o": ["[5, 3]", "[1, 3, 5]", "[1, 1]", "[1, 3]"], "a": 3}];
+const L = ['A','B','C','D'];
+const st = {i:0, score:0, streak:0, best:0, breaks:0, locked:false};
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function setStat(id, v, bump){
+  const el = $(id).querySelector('b');
+  if(el.textContent !== String(v)){
+    el.textContent = v;
+    if(bump){ const p=$(id); p.classList.remove('bump'); void p.offsetWidth; p.classList.add('bump'); }
+  }
+}
+function renderStats(bump){
+  setStat('sScore', st.score, bump); setStat('sStreak', st.streak, bump);
+  setStat('sBest', st.best, bump); setStat('sBreaks', st.breaks, bump);
+  $('prog').style.width = (st.i / QUESTIONS.length * 100) + '%';
+}
+
+/* question text: first line is prose, remaining lines (if any) are code */
+function questionHTML(q){
+  const parts = q.split('\n');
+  if(parts.length === 1) return '<p>'+esc(q)+'</p>';
+  return '<p>'+esc(parts[0])+'</p><pre class="code"><code>'+esc(parts.slice(1).join('\n'))+'</code></pre>';
+}
+
+function showQuestion(){
+  const q = QUESTIONS[st.i];
+  st.locked = false;
+  $('stage').innerHTML = `
+    <section class="card">
+      <div class="qnum">Question ${st.i+1} of ${QUESTIONS.length}</div>
+      <div class="qtext">${questionHTML(q.q)}</div>
+      <div class="opts" role="group" aria-label="Answer options">
+        ${q.o.map((t,k)=>`<button class="opt" data-k="${k}" type="button"><span class="k">${L[k]}</span><span class="t">${esc(t)}</span></button>`).join('')}
+      </div>
+      <div class="hint" id="hint">Pick one option. You can try again until you get it right.</div>
+    </section>`;
+  $('stage').querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => answer(+b.dataset.k, b)));
+  renderStats(false);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function answer(k, btn){
+  if(st.locked) return;
+  const q = QUESTIONS[st.i];
+  if(k === q.a){
+    st.locked = true;
+    st.score++; st.streak++;
+    if(st.streak > st.best) st.best = st.streak;
+    btn.classList.add('right');
+    $('stage').querySelectorAll('.opt').forEach(b => b.disabled = true);
+    renderStats(true);
+    celebrate();
+    const last = st.i === QUESTIONS.length - 1;
+    openModal('good', 'Correct!',
+      st.streak > 1 ? `${st.streak} in a row. Keep it going.` : 'Nice. Streak started.',
+      last ? 'See results' : 'Next question', () => { st.i++; last ? showFinal() : showQuestion(); });
+  } else {
+    st.locked = true;
+    st.streak = 0; st.breaks++;
+    btn.classList.add('wrong'); btn.disabled = true;
+    renderStats(true);
+    openModal('bad', 'Not quite',
+      'Streak reset. Read the question again and try another option.',
+      'Try again', () => { st.locked = false; $('hint').textContent = 'Wrong options stay greyed out. Pick another.'; });
+  }
+}
+
+function openModal(kind, title, msg, label, onClose){
+  const icon = kind === 'good'
+    ? '<svg class="bigstar" viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--star)" d="M12 2l2.9 6.6 7.1.7-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.3l7.1-.7z"/></svg>'
+    : '<div class="x" aria-hidden="true">×</div>';
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="pop ${kind}" role="dialog" aria-modal="true" aria-label="${title}">${icon}<h2>${title}</h2><p>${msg}</p><button class="btn" type="button" id="popBtn">${label}</button></div>`;
+  $('modalRoot').appendChild(m);
+  const b = m.querySelector('#popBtn'); b.focus();
+  b.addEventListener('click', () => { m.remove(); onClose(); });
+}
+
+/* stars + sprinkles on a full-screen canvas */
+const cv = $('fx'), cx = cv.getContext('2d');
+let parts = [], raf = 0;
+function fit(){ cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; }
+addEventListener('resize', fit); fit();
+function starPath(c, r){
+  c.beginPath();
+  for(let i=0;i<10;i++){ const a = Math.PI/5*i - Math.PI/2, rr = i%2 ? r*0.45 : r; c.lineTo(Math.cos(a)*rr, Math.sin(a)*rr); }
+  c.closePath();
+}
+function celebrate(){
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const cols = ['#ffc233','#ff8a3d','#4cc787','#5aa9ff','#ff6b9d','#b48cff'];
+  const W = cv.width, H = cv.height, d = devicePixelRatio;
+  for(let i=0;i<110;i++){
+    const star = i % 3 === 0;
+    parts.push({x:W/2, y:H*0.4, vx:(Math.random()-.5)*16*d, vy:(-Math.random()*13-3)*d,
+      g:.38*d, r:(star ? 9+Math.random()*9 : 3+Math.random()*4)*d, rot:Math.random()*6, vr:(Math.random()-.5)*.3,
+      c:cols[i%cols.length], star, life:1, w:Math.random()*2+1});
+  }
+  if(!raf) raf = requestAnimationFrame(tick);
+}
+function tick(){
+  cx.clearRect(0,0,cv.width,cv.height);
+  parts = parts.filter(p => p.life > 0 && p.y < cv.height + 50);
+  for(const p of parts){
+    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.vx *= .99; p.rot += p.vr; p.life -= .006;
+    cx.save(); cx.translate(p.x,p.y); cx.rotate(p.rot); cx.globalAlpha = Math.max(p.life,0); cx.fillStyle = p.c;
+    if(p.star){ starPath(cx,p.r); cx.fill(); } else cx.fillRect(-p.r/2, -p.r*p.w/4, p.r, p.r*p.w/2);
+    cx.restore();
+  }
+  raf = parts.length ? requestAnimationFrame(tick) : 0;
+  if(!parts.length) cx.clearRect(0,0,cv.width,cv.height);
+}
+
+function showFinal(){
+  $('prog').style.width = '100%';
+  const n = QUESTIONS.length;
+  $('stage').innerHTML = `
+    <section class="card final">
+      <div class="qnum">Quiz complete</div>
+      <h2>You finished all ${n} questions</h2>
+      <div class="grid">
+        <div class="stat"><b>${st.score} / ${n}</b><span>Final score</span></div>
+        <div class="stat hot"><b>${st.best}</b><span>Best streak</span></div>
+        <div class="stat"><b>${st.breaks}</b><span>Total streak breaks</span></div>
+      </div>
+      <p>${st.breaks === 0 ? 'Perfect run. No streak breaks at all.' : `Your streak broke ${st.breaks} time${st.breaks>1?'s':''}. Try again and beat your best streak of ${st.best}.`}</p>
+      <button class="btn" id="again" type="button">Play again</button>
+    </section>`;
+  $('again').addEventListener('click', () => { Object.assign(st,{i:0,score:0,streak:0,best:0,breaks:0,locked:false}); showQuestion(); });
+  celebrate();
+}
+
+showQuestion();
+</script>
